@@ -1,0 +1,7 @@
+data.inc
+*.bin
+*.sym
+*.lst
+/gtt6.cas
+preview_*.png
+harness/tvcsim
