@@ -487,6 +487,97 @@ def gull(frame):
 GULL = [gull(0), gull(1)]
 assert all(rowbyte(fe, y, xb) == skyb for y in range(GULL_Y0, GULL_Y1) for xb in range(64)) or True
 
+
+# ================================================================ 2c. PLÁZS (éjszakai buli)
+pz = Canvas()
+for _ in range(40):
+    x = random.randint(0, 127); y = random.randint(0, 38)
+    if 36 <= x <= 90 and y >= 6:
+        continue
+    pz.px(x, y, random.choice([WHT, LBLU, GRY]))
+# fénycsóvák a színpad tetejéről (statikus)
+for (x0, x1a, x1b, c) in [(24, 0, 10, LCYN), (104, 118, 127, LMAG), (30, 14, 24, LGRN), (98, 100, 110, YEL)]:
+    for y in range(0, 41):
+        t = y / 40
+        xa = int(x1a + (x0 - x1a) * t); xb = int(x1b + (x0 + 2 - x1b) * t)
+        for x in range(min(xa, xb), max(xa, xb) + 1):
+            if not (36 <= x <= 90 and 6 <= y <= 36):
+                pz.px(x, y, c if (x - min(xa, xb)) % 3 == 0 or y < 4 else BLK)
+# színpad: rácsos tartó, LED-fal, DJ-pult, hangfalak
+pz.rect(16, 40, 111, 43, GRY)
+for x in range(16, 112, 4):
+    pz.px(x, 41, WHT)
+pz.rect(16, 40, 21, 137, GRY); pz.rect(106, 40, 111, 137, GRY)
+for y in range(46, 138, 6):
+    pz.rect(18, y, 19, y + 3, BLK); pz.rect(108, y, 109, y + 3, BLK)
+for i, c in enumerate([YEL, LMAG, LCYN, LGRN, YEL, LMAG, LCYN, LGRN]):
+    x = 26 + i * 10
+    pz.rect(x, 44, x + 3, 47, c)
+EQ_Y0, EQ_H, EQ_X0, EQ_N = 58, 55, 20, 8
+pz.rect(38, 55, 89, 57, GRY); pz.rect(38, 113, 89, 115, GRY)
+pz.rect(38, 55, 39, 115, GRY); pz.rect(88, 55, 89, 115, GRY)
+pz.rect(40, 58, 87, 112, BLK)
+# DJ
+pz.ell(64, 120, 3, 4, BRN); pz.rect(60, 119, 61, 121, LCYN); pz.rect(67, 119, 68, 121, LCYN)
+pz.rect(59, 124, 69, 130, BLK)
+pz.rect(44, 126, 83, 137, BLK); pz.rect(44, 126, 83, 127, LMAG)
+pz.text("DJ LACI", 50, 130, LCYN, 1, 1)
+for sx in (0, 112):
+    pz.rect(sx, 88, sx + 15, 137, BLK)
+    for cy in (96, 112, 128):
+        pz.ell(sx + 7, cy, 5, 6, GRY); pz.ell(sx + 7, cy, 2, 3, BLK)
+pz.rect(0, 138, 127, 139, LMAG)
+# táncparkett / homok, a tömeg háttere soronként egyforma
+for y0, y1, a, b in [(140, 159, MAG, BLK), (160, 185, MAG, MAG), (186, 213, MAG, BLU)]:
+    pz.hdither(y0, y1, a, b)
+# hátsó sor: fejek és feltartott kezek (statikus)
+for x in range(2, 126, 7):
+    hy = 166 + (x * 13) % 5
+    pz.ell(x + 2, hy, 2, 3, BLK); pz.rect(x, hy + 3, x + 4, 185, BLK)
+    if (x // 7) % 3 == 0:
+        pz.line([(x, hy + 4), (x - 2, hy - 6)], BLK)
+DANCE_Y, DANCE_H, DANCE_W = 182, 32, 4
+for y in range(DANCE_Y, DANCE_Y + DANCE_H):    # a táncosok sávja soronként egyforma
+    for x in range(W):
+        pz.px(x, y, pz.get(0, y) if x % 2 == 0 else pz.get(1, y))
+pz_bytes = bytearray(pz.to_bytes())
+for y in range(214, 240):
+    for xb in range(64):
+        pz_bytes[y * 64 + xb] = 0
+def dancer(variant, pose):
+    c = Canvas()
+    for y in range(DANCE_Y, DANCE_Y + DANCE_H):
+        for x in range(8):
+            c.px(x, y, pz.get(x, y))
+    oy = DANCE_Y + (4 if pose == 0 else 1)     # felugrik
+    body, hair, skin = BLK, BLK, BLK
+    if variant == 2: body, hair, skin = LMAG, YEL, BRN        # Lujza
+    if variant == 3: body, hair, skin = LCYN, BRN, BRN        # Jani
+    cx_ = 3
+    c.rect(cx_ - 1, oy + 1, cx_ + 1, oy + 4, skin)            # fej
+    c.rect(cx_ - 1, oy, cx_ + 1, oy, hair)
+    if variant in (1, 2):
+        c.rect(cx_ - 2, oy + 1, cx_ - 2, oy + 7, hair)          # hosszú haj
+    c.rect(cx_ - 2, oy + 6, cx_ + 2, oy + 16, body)           # törzs
+    leg = BLK if variant < 2 else BLU
+    if pose == 0:
+        c.rect(cx_ - 2, oy + 17, cx_ - 1, oy + 27, leg); c.rect(cx_ + 1, oy + 17, cx_ + 2, oy + 27, leg)
+        c.rect(cx_ - 3, oy + 7, cx_ - 3, oy + 15, skin if variant >= 2 else BLK)
+        c.rect(cx_ + 3, oy + 7, cx_ + 3, oy + 15, skin if variant >= 2 else BLK)
+    else:
+        c.rect(cx_ - 2, oy + 17, cx_ - 1, oy + 25, leg); c.rect(cx_ + 1, oy + 17, cx_ + 3, oy + 26, leg)
+        c.line([(cx_ - 3, oy + 6), (cx_ - 4, oy - 1)], skin if variant >= 2 else BLK)
+        c.line([(cx_ + 3, oy + 6), (cx_ + 4, oy - 1)], skin if variant >= 2 else BLK)
+    return bytes(rowbyte(c, DANCE_Y + r, xb) for r in range(DANCE_H) for xb in range(DANCE_W))
+DANCERS = [dancer(v, p) for v in range(4) for p in (0, 1)]
+DANCE_X = list(range(1, 61, 5))
+DANCE_V = [0, 1, 0, 0, 1, 2, 3, 1, 0, 1, 0, 1]
+EQCOL = []
+for r in range(EQ_H):
+    t = r / EQ_H
+    c = LRED if t < .2 else YEL if t < .45 else LGRN
+    EQCOL.append(pbyte(c, c) if r % 3 != 2 else 0)
+
 # ================================================================ 3. CÍMKÉP
 tc = Canvas()
 for y0, y1, a, b in [(0, 59, BLK, BLK), (60, 79, BLK, BLU), (80, 119, BLU, BLU), (120, 139, BLU, MAG),
@@ -575,6 +666,7 @@ save_preview(sun_bytes, "preview_sunset.png")
 save_preview(ch_bytes, "preview_chase.png")
 save_preview(tcb, "preview_title.png")
 save_preview(fe_bytes, "preview_ferry.png")
+save_preview(pz_bytes, "preview_plazs.png")
 
 # ================================================================ zene
 def pitch(f):
@@ -612,6 +704,14 @@ fan += ev(20, None, 0)
 FANFARE = bytes(fan + [0])
 BLIP = bytes(ev(3, 1200, 14) + ev(3, 600, 10) + [0])
 STRIKE = bytes(ev(4, 160, 15) + ev(6, 110, 12) + [0])
+dance = []
+prog = [57, 57, 53, 53, 48, 48, 55, 55]
+for bi in range(16):
+    root = prog[bi // 2]
+    bass = root - 12 + (12 if bi % 2 else 0)
+    dance += ev(2, 95, 15) + ev(2, 62, 13) + ev(8, None, 0)
+    dance += ev(5, note(bass), 13) + ev(3, note(bass), 6) + ev(2, 3200, 5) + ev(2, None, 0)
+DANCE = bytes(dance + [0])
 HORN = bytes(ev(40, 98, 15) + ev(10, None, 0) + ev(60, 98, 15) + ev(10, 98, 8) + ev(10, 98, 4) + [0])
 TADA = bytes(ev(5, note(76), 15) + ev(5, note(79), 15) + ev(5, note(84), 15) + ev(20, note(88), 15) + ev(10, note(88), 6) + [0])
 
@@ -695,6 +795,14 @@ timeline("CAP_FERRY", [
     (610, "TIHANY: KÖRÖZÉS...ZÉS...ÉS...", LGRN),
     (790, "", WHT),
 ])
+timeline("CAP_PLAZS", [
+    (20, "SIÓFOK, PLÁZS. ÉJFÉL.", LMAG),
+    (170, "AHOL SENKI SEM KERES...", LCYN),
+    (320, "EGY FRÖCCS: 2500 FORINT.", YEL),
+    (470, "A BULI SOSEM ÉR VÉGET...", LGRN),
+    (620, "...CSAK A PÉNZ.", LRED),
+    (790, "", WHT),
+])
 timeline("CAP_TITLE", [
     (40, "HAMAROSAN* A VIDEOTON TVC-N", WHT),
     (400, "", WHT),
@@ -743,6 +851,7 @@ out.append(f"G_0 equ {CIDX['0']}")
 out.append(f"G_F equ {CIDX['F']}")
 out.append(f"G_T equ {CIDX['T']}")
 out.append(f"G_SPACE equ {CIDX[' ']}")
+S('PLÁZS')
 for s, nm in strings.items():
     db(nm, enc(s))
 for name, t in COLS.items():
@@ -751,11 +860,17 @@ for name, t in BIGS.items():
     db(name, t, 32)
 
 # képek
-for nm, b in (("IMG_SUNSET", sun_bytes), ("IMG_CHASE", ch_bytes), ("IMG_TITLE", tcb), ("IMG_FERRY", fe_bytes)):
-    r = rle(b[:214 * 64])
-    assert unrle_check(r, 214 * 64) == b[:214 * 64]
-    db(nm, r, 32)
-    out.append(f"; {nm}: {len(r)} bájt")
+for nm, b in (("IMG_SUNSET", sun_bytes), ("IMG_CHASE", ch_bytes), ("IMG_TITLE", tcb), ("IMG_FERRY", fe_bytes),
+               ("IMG_PLAZS", pz_bytes)):
+    b = bytes(b[:214 * 64])
+    r = rle(b)
+    x = bytes(b[i] ^ (b[i - 64] if i >= 64 else 0) for i in range(len(b)))   # soronkénti XOR
+    rx = rle(x)
+    assert unrle_check(r, 214 * 64) == b and unrle_check(rx, 214 * 64) == x
+    use_x = len(rx) < len(r)
+    db(nm, rx if use_x else r, 32)
+    out.append(f"{nm}_X equ {1 if use_x else 0}")
+    out.append(f"; {nm}: {len(rx) if use_x else len(r)} bájt (XOR: {use_x})")
 out.append(f"IMG_LEN equ {214 * 64}")
 # naplemente táblák
 db("SKYROW", SKYROW)
@@ -796,6 +911,14 @@ for t in range(256):
     x = -18 if t < 30 else min(4, -18 + (t - 30))
     pol.append(x & 0xFF)
 db("FPOLPATH", pol, 32)
+# plázs
+for i, d in enumerate(DANCERS):
+    db(f"DANCER{i}", d, DANCE_W)
+dw("DANCER_TAB", [f"DANCER{i}" for i in range(8)], 8)
+db("DANCE_X", DANCE_X); db("DANCE_V", DANCE_V); db("EQCOL", EQCOL)
+out += [f"DANCE_Y equ {DANCE_Y}", f"DANCE_H equ {DANCE_H}", f"DANCE_W equ {DANCE_W}", f"DANCE_N equ {len(DANCE_X)}",
+        f"EQ_Y0 equ {EQ_Y0}", f"EQ_H equ {EQ_H}", f"EQ_X0 equ {EQ_X0}", f"EQ_N equ {EQ_N}",
+        f"PLAZS_ADDR equ {0x8000 + 10 * 64 + cx('PLÁZS', True)}", f"PLAZS_STR equ {S('PLÁZS')}"]
 # komp
 db("FERRY", FERRY, FERRY_W)
 db("GULL0", GULL[0], GULL_W); db("GULL1", GULL[1], GULL_W)
@@ -811,7 +934,7 @@ dw("FWAVE_TAB", rows, 4)
 db("SUB_ON", SUB_ON, 32); db("SUB_OFF", SUB_OFF, 32)
 out.append(f"SUB_ADDR equ {0x8000 + (SUB_Y - 1) * 64}")
 # zene
-db("HORN", HORN); db("MUSIC", MUSIC); db("SIREN", SIREN); db("FANFARE", FANFARE); db("BLIP", BLIP); db("STRIKE", STRIKE); db("TADA", TADA)
+db("HORN", HORN); db("DANCE", DANCE); db("MUSIC", MUSIC); db("SIREN", SIREN); db("FANFARE", FANFARE); db("BLIP", BLIP); db("STRIKE", STRIKE); db("TADA", TADA)
 out.append(f"CAP_Y equ {CAP_Y}")
 out.append(f"STRIKE_B equ {pbyte(LRED, LRED)}")
 out.append(f"TRABI_X equ 38")

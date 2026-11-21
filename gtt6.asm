@@ -4,7 +4,7 @@
 ; Z80 @ 3.125 MHz, sjasmplus. Indítás: 10 PRINT USR(6659), automatikusan.
 ;
 ; Jelenetek: KŐSZTÁR GAMES bemutatja -> naplemente a Balatonon -> üldözés
-; Siófok mellett -> komp Tihanyba -> címkép -> a megjelenési dátumok csúszása.  Körbe megy.
+; Siófok mellett -> komp Tihanyba -> buli a Plázson -> címkép -> a megjelenési dátumok csúszása.  Körbe megy.
 ; Szóköz: következő jelenet,  Esc: kilépés a BASIC-be.
 ;
 ; Memória (lapozás $90 = U0 | U1 | VID | U3):
@@ -63,10 +63,16 @@ start:
         ld bc,BSS_LEN-1
         ld (hl),0
         ldir
+        ld hl,$7FC0             ; a képernyő előtti sor nulla (az XOR-os kicsomagoló első sorához)
+        ld de,$7FC1
+        ld bc,63
+        ld (hl),0
+        ldir
 .again: call scene_splash
         call scene_sunset
         call scene_chase
         call scene_ferry
+        call scene_plazs
         call scene_title
         call scene_delay
         jr .again
@@ -184,14 +190,61 @@ cls_all:
         ldir
         ret
 
-; show_img: HL = tömörített kép (214 sor), a felirat-sáv fekete marad
+; show_img: HL = tömörített kép (214 sor), A = 1: soronkénti XOR-különbség; a felirat-sáv fekete marad
 show_img:
+        push af
         push hl
         call cls_all
         pop hl
+        pop af
         ld de,VRAM
         ld bc,IMG_LEN
-        ; tovább: unrle
+        or a
+        jr z,unrle
+        ; tovább: unrle_x
+
+; unrle_x: mint unrle, de minden kimenő bájt XOR a fölötte lévő sor bájtjával (DE-64)
+unrle_x:
+        ld (ur_left),bc
+        push de
+        pop ix
+        ld bc,-64
+        add ix,bc
+.loop:  ld bc,(ur_left)
+        ld a,b
+        or c
+        ret z
+        ld a,(hl)
+        inc hl
+        cp 128
+        jr nc,.run
+        inc a
+        ld c,a
+        ld b,0
+        call unrle.dec
+        ld b,c
+.l:     ld a,(hl)
+        inc hl
+        xor (ix+0)
+        ld (de),a
+        inc de
+        inc ix
+        djnz .l
+        jr .loop
+.run:   sub 125
+        ld c,a
+        ld b,0
+        call unrle.dec
+        ld b,c
+        ld c,(hl)
+        inc hl
+.r:     ld a,c
+        xor (ix+0)
+        ld (de),a
+        inc de
+        inc ix
+        djnz .r
+        jr .loop
 
 ; unrle: HL = forrás, DE = cél, BC = kibontott hossz
 unrle:
@@ -433,6 +486,7 @@ scene_splash:
 ;=============================================================================
 scene_sunset:
         ld hl,IMG_SUNSET
+        ld a,IMG_SUNSET_X
         call show_img
         ld a,40
         ld (sun_y),a
@@ -664,6 +718,7 @@ draw_refl:
 ;=============================================================================
 scene_chase:
         ld hl,IMG_CHASE
+        ld a,IMG_CHASE_X
         call show_img
         ld hl,NIB_15_1
         ld (cur_nib),hl
@@ -939,6 +994,7 @@ draw_money:
 ;=============================================================================
 scene_ferry:
         ld hl,IMG_FERRY
+        ld a,IMG_FERRY_X
         call show_img
         xor a
         ld (siren_on),a
@@ -1084,10 +1140,225 @@ gull_one:
         jp blit_w
 
 ;=============================================================================
+; 2c. PLÁZS: éjszakai buli
+;=============================================================================
+scene_plazs:
+        ld hl,IMG_PLAZS
+        ld a,IMG_PLAZS_X
+        call show_img
+        xor a
+        ld (beat_ph),a
+        ld (beat_n),a
+        ld hl,eq_h
+        ld b,EQ_N
+.e:     ld (hl),4
+        inc hl
+        djnz .e
+        ld c,0
+        call dancers_group
+        ld c,1
+        call dancers_group
+        call draw_sign
+        call eq_fall_draw
+        ld hl,DANCE
+        call play_music
+        ld hl,CAP_PLAZS
+        ld de,800
+        call scene_start
+.loop:  call tick
+        ret c
+        ld a,(beat_ph)          ; ütem: 24 képkocka (125 BPM)
+        or a
+        jr nz,.p1
+        call eq_kick
+        ld hl,beat_n
+        inc (hl)
+        ld c,0
+        call dancers_group
+        jr .next
+.p1:    cp 1
+        jr nz,.p3
+        ld c,1
+        call dancers_group
+        jr .next
+.p3:    cp 3
+        jr nz,.peq
+        call draw_sign
+        jr .next
+.peq:   rrca
+        jr c,.next
+        call eq_fall_draw
+.next:  ld a,(beat_ph)
+        inc a
+        cp 24
+        jr c,$+3
+        xor a
+        ld (beat_ph),a
+        jr .loop
+
+; dancers_group: C = 0/1: a páros / páratlan sorszámú táncosok újrarajzolása (póz = ütem + sorszám)
+dancers_group:
+        ld b,c
+.d:     ld a,b
+        cp DANCE_N
+        ret nc
+        push bc
+        ld a,(beat_n)
+        add a,b
+        and 1
+        ld e,a
+        ld hl,DANCE_V
+        ld a,b
+        add a,l
+        ld l,a
+        jr nc,$+3
+        inc h
+        ld a,(hl)
+        add a,a
+        add a,e
+        add a,a
+        ld hl,DANCER_TAB
+        add a,l
+        ld l,a
+        jr nc,$+3
+        inc h
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        push de
+        ld hl,DANCE_X
+        ld a,b
+        add a,l
+        ld l,a
+        jr nc,$+3
+        inc h
+        ld a,(hl)
+        ld hl,VRAM+DANCE_Y*64
+        add a,l
+        ld l,a
+        jr nc,$+3
+        inc h
+        ex de,hl
+        pop hl
+        ld bc,DANCE_W*256+DANCE_H
+        call blit_w
+        pop bc
+        inc b
+        inc b
+        jr .d
+
+; draw_sign: a PLÁZS felirat ütemenként más színű
+draw_sign:
+        ld a,(beat_n)
+        and 3
+        add a,a
+        ld hl,SIGN_COLS
+        add a,l
+        ld l,a
+        jr nc,$+3
+        inc h
+        ld e,(hl)
+        inc hl
+        ld d,(hl)
+        ld (cur_big),de
+        ld hl,PLAZS_STR
+        ld de,PLAZS_ADDR
+        jp print_big_str
+SIGN_COLS:  dw BIG_11_0,BIG_13_0,BIG_14_0,BIG_12_0
+
+rnd:    ld a,(seed)
+        ld b,a
+        add a,a
+        add a,a
+        add a,b
+        inc a
+        ld (seed),a
+        ret
+
+; eq_kick: ütemre új oszlopmagasságok
+eq_kick:
+        ld hl,eq_h
+        ld c,EQ_N
+.k:     call rnd
+        and 31
+        add a,22
+        ld (hl),a
+        inc hl
+        dec c
+        jr nz,.k
+        ret
+
+; eq_fall_draw: az oszlopok esnek, és kirajzolódnak (felül fekete, alul színes)
+eq_fall_draw:
+        ld b,0
+.b:     push bc
+        ld hl,eq_h
+        ld a,b
+        add a,l
+        ld l,a
+        jr nc,$+3
+        inc h
+        ld a,(hl)
+        sub 2
+        cp 4
+        jr nc,$+4
+        ld a,4
+        ld (hl),a
+        ld c,a
+        ld a,EQ_H
+        sub c
+        ld c,a                  ; fekete sorok száma
+        ld a,b
+        add a,a
+        add a,b
+        add a,EQ_X0
+        ld hl,VRAM+EQ_Y0*64
+        add a,l
+        ld l,a
+        jr nc,$+3
+        inc h
+        ld de,63
+        ld b,c
+        xor a
+.k:     ld (hl),a
+        inc hl
+        ld (hl),a
+        add hl,de
+        djnz .k
+        push hl
+        ld hl,EQCOL
+        ld a,c
+        add a,l
+        ld l,a
+        jr nc,$+3
+        inc h
+        ex (sp),hl
+        ld a,EQ_H
+        sub c
+        ld b,a
+.c:     ex (sp),hl
+        ld a,(hl)
+        inc hl
+        ex (sp),hl
+        ld (hl),a
+        inc hl
+        ld (hl),a
+        add hl,de
+        djnz .c
+        pop hl
+        pop bc
+        inc b
+        ld a,b
+        cp EQ_N
+        jr c,.b
+        ret
+
+;=============================================================================
 ; 3. CÍMKÉP
 ;=============================================================================
 scene_title:
         ld hl,IMG_TITLE
+        ld a,IMG_TITLE_X
         call show_img
         ld hl,FANFARE           ; fanfár, utána a zene
         ld (snd_ptr),hl
@@ -1361,7 +1632,7 @@ FT_INIT:    db G_F,G_T,G_SPACE,G_0,G_0,G_0,G_0,G_0,G_0,G_0,$FF
         include "data.inc"
 
 CODE_END:
-        ASSERT CODE_END <= $8000
+        ASSERT CODE_END <= $7FC0
 
 ;=============================================================================
 ; VÁLTOZÓK (U3)
@@ -1410,6 +1681,10 @@ wave_ph:    db 0
 g1x:        db 0
 g2x:        db 0
 fw_r:       db 0
+beat_ph:    db 0
+beat_n:     db 0
+seed:       db 0
+eq_h:       ds 8
 dl_flags:   db 0
 dl_strike:  dw 0
 dl_w:       db 0
