@@ -4,7 +4,7 @@ Paródia-„trailer” demó **Videoton TV-Computer 64K**-ra. 16 színű mód (1
 
 **Kész fájl:** [`dist/gtt6.cas`](dist/gtt6.cas) (24,8 KB)
 
-▶️ **Videó a demóról:** https://www.youtube.com/watch?v=sxfMsHoAQMc
+▶️ **Videó a demóról:** https://youtu.be/QsxARcuTUf8
 
 ![Előnézet](docs/elonezet.gif)
 
