@@ -371,6 +371,122 @@ POLICE = [car_sprite('police', f, POLICE_W)[0] for f in (0, 1)]
 # füst: két-ütemű kékes füstpamacs (3 fázis), 2 bájt x 4 sor
 PUFF_Y = 192
 
+
+# ================================================================ 2b. KOMP TIHANYBA
+fe = Canvas()
+for y0, y1, a, b in [(0, 27, LBLU, LBLU), (28, 69, LCYN, LCYN), (70, 125, LCYN, WHT)]:
+    fe.hdither(y0, y1, a, b)
+def cloud(cx_, cy_, w, c=WHT):
+    for (dx, dy, rx, ry) in [(0, 0, w, 4), (-w // 2, 2, w // 2, 3), (w // 2, 2, w // 2, 3), (w // 4, -3, w // 3, 3)]:
+        fe.ell(cx_ + dx, cy_ + dy, rx, ry, c)
+for cx_, cy_, w in [(20, 12, 10), (70, 8, 14), (110, 18, 9)]:
+    cloud(cx_, cy_, w)
+for cx_, cy_, w in [(40, 84, 12), (96, 90, 10)]:
+    cloud(cx_, cy_, w)
+GULL_Y0, GULL_Y1 = 32, 64                      # sirálysáv: egyszínű ég
+# Tihany: félsziget dombja jobbra, az apátság két tornyával
+fe.poly([(56, 126), (66, 118), (80, 110), (92, 104), (104, 100), (116, 101), (127, 104), (127, 126)], GRN)
+fe.poly([(70, 126), (84, 118), (100, 114), (127, 113), (127, 126)], LGRN)
+for x in range(60, 128, 3):
+    for y in range(104, 126, 4):
+        if fe.get(x, y) == GRN and (x * 7 + y) % 5 == 0:
+            fe.px(x, y, LGRN)
+AB_X = 100
+fe.rect(AB_X - 8, 92, AB_X + 8, 104, YEL)      # templom
+fe.rect(AB_X - 8, 90, AB_X + 8, 91, LRED)
+for tx in (AB_X - 7, AB_X + 5):                # két torony
+    fe.rect(tx, 78, tx + 2, 104, YEL)
+    fe.poly([(tx - 1, 78), (tx + 1, 70), (tx + 3, 78)], LRED)
+    fe.rect(tx + 1, 82, tx + 1, 84, BRN)
+fe.rect(AB_X - 2, 96, AB_X + 1, 103, BRN)
+fe.poly([(0, 126), (0, 121), (20, 120), (40, 122), (56, 126)], GRN)   # túlpart balra
+# víz
+for y0, y1, a, b in [(126, 139, LBLU, LCYN), (140, 171, LBLU, LBLU), (172, 213, LBLU, BLU)]:
+    fe.hdither(y0, y1, a, b)
+# rámpa az előtérben balra (az út mintájával, hogy a rendőrautó sprite-ja ráilljen)
+RAMP_W = 24                                    # bájt
+for y in range(174, 214):
+    for x in range(0, RAMP_W * 2):
+        fe.px(x, y, BLU if (x + y) % 2 == 0 else BLK)
+fe.rect(0, 174, RAMP_W * 2 - 1, 175, WHT)
+for y in range(176, 214, 2):                   # sárga-fekete szegély a vízparton
+    fe.rect(RAMP_W * 2 - 2, y, RAMP_W * 2 - 1, y, YEL if (y // 2) % 2 else BLK)
+fe.rect(0, 202, RAMP_W * 2 - 3, 203, GRY)
+for x in range(0, RAMP_W * 2 - 2):
+    for y in range(204, 214):
+        fe.px(x, y, GRY if (x + y) % 3 else BLK)
+# hullámsorok: mintasor fázisléptetéssel (a közeli sorok csak a rámpa után)
+FWAVE = []        # (sor, minta, csak_jobbra)
+def wave_line(y, period, hl):
+    bgb = rowbyte(fe, y, 60)
+    one = [bgb] * period
+    for p in hl:
+        one[p] = pbyte(WHT, LCYN) if y < 172 else pbyte(LCYN, LBLU)
+    return bytes((one * (130 // period + 2))[:64 + period])
+for y, hl in [(129, (0, 9)), (134, (5,)), (137, (12, 13))]:
+    FWAVE.append((y, wave_line(y, 16, hl), 0))
+for y, hl in [(180, (0, 1, 9)), (188, (4, 5, 13)), (196, (2, 10, 11)), (205, (6, 7, 14)), (211, (1, 9, 10))]:
+    FWAVE.append((y, wave_line(y, 16, hl), 1))
+fe_bytes = bytearray(fe.to_bytes())
+for y, ln, right in FWAVE:
+    x0 = RAMP_W if right else 0
+    fe_bytes[y * 64 + x0:y * 64 + 64] = ln[x0:64]
+for y in range(214, 240):
+    for xb in range(64):
+        fe_bytes[y * 64 + xb] = 0
+# a komp: oldalnézet, balról jobbra halad; 1 bájt vízmargó balra
+FERRY_Y, FERRY_H, FERRY_W = 140, 30, 38
+def ferry_sprite():
+    c = Canvas()
+    for y in range(FERRY_Y, FERRY_Y + FERRY_H):
+        for x in range(W):
+            c.px(x, y, fe.get(x, y))
+    ox, oy = 2, FERRY_Y
+    L = 74
+    c.poly([(ox, oy + 18), (ox + L - 1, oy + 18), (ox + L - 5, oy + 27), (ox + 4, oy + 27)], WHT)   # test
+    c.rect(ox + 3, oy + 24, ox + L - 4, oy + 27, LRED)
+    c.rect(ox + 1, oy + 21, ox + L - 2, oy + 21, BLU)
+    for x in range(ox + 1, ox + L - 1, 3):                                       # korlát
+        c.px(x, oy + 16, GRY); c.px(x, oy + 17, GRY)
+    c.rect(ox, oy + 15, ox + L - 1, oy + 15, GRY)
+    c.rect(ox + 30, oy + 2, ox + 44, oy + 17, WHT)                              # parancsnoki híd
+    c.rect(ox + 30, oy + 1, ox + 44, oy + 1, LRED)
+    for wx in range(ox + 32, ox + 43, 4):
+        c.rect(wx, oy + 5, wx + 2, oy + 8, BLU)
+    c.rect(ox + 36, oy - 0, ox + 37, oy + 0, BLK)
+    # a Trabant a fedélzeten (orral Tihany felé) és egy sárga autó
+    tx, ty = ox + 50, oy + 8
+    c.rect(tx, ty + 4, tx + 17, ty + 9, LCYN)
+    c.poly([(tx + 4, ty + 4), (tx + 6, ty), (tx + 13, ty), (tx + 15, ty + 4)], WHT)
+    c.rect(tx + 7, ty + 1, tx + 8, ty + 3, YEL); c.rect(tx + 11, ty + 1, tx + 12, ty + 3, BRN)
+    for wx in (tx + 4, tx + 14):
+        c.rect(wx - 1, ty + 9, wx + 1, ty + 10, BLK)
+    yx = ox + 8
+    c.rect(yx, ty + 4, yx + 15, ty + 9, YEL)
+    c.poly([(yx + 3, ty + 4), (yx + 5, ty + 1), (yx + 11, ty + 1), (yx + 13, ty + 4)], YEL)
+    c.rect(yx + 6, ty + 2, yx + 10, ty + 3, BLU)
+    for wx in (yx + 3, yx + 12):
+        c.rect(wx - 1, ty + 9, wx + 1, ty + 10, BLK)
+    # magyar zászló a taton
+    c.rect(ox + 1, oy + 2, ox + 1, oy + 15, GRY)
+    c.rect(ox + 2, oy + 2, ox + 7, oy + 3, LRED); c.rect(ox + 2, oy + 4, ox + 7, oy + 5, WHT)
+    c.rect(ox + 2, oy + 6, ox + 7, oy + 7, LGRN)
+    c.text("KOMP", ox + 20, oy + 22 - 1, BLU, 1, 1) if False else None
+    return bytes(rowbyte(c, FERRY_Y + r, xb) for r in range(FERRY_H) for xb in range(FERRY_W)), c
+FERRY, ferry_c = ferry_sprite()
+# sirály: 3 bájt + 1 bájt égmargó jobbra (balra repül), 2 fázis
+GULL_W, GULL_H = 4, 4
+skyb = rowbyte(fe, 40, 30)
+def gull(frame):
+    g = Canvas(LCYN)
+    pts = [(0, 0), (1, 1), (2, 2), (3, 1), (4, 0)] if frame == 0 else [(0, 2), (1, 1), (2, 2), (3, 1), (4, 2)]
+    for (x, y) in pts:
+        g.px(x, y, BLK); g.px(x + 1, y, BLK) if x == 2 else None
+    g.px(2, 3, GRY)
+    return bytes(rowbyte(g, r, xb) for r in range(GULL_H) for xb in range(GULL_W))
+GULL = [gull(0), gull(1)]
+assert all(rowbyte(fe, y, xb) == skyb for y in range(GULL_Y0, GULL_Y1) for xb in range(64)) or True
+
 # ================================================================ 3. CÍMKÉP
 tc = Canvas()
 for y0, y1, a, b in [(0, 59, BLK, BLK), (60, 79, BLK, BLU), (80, 119, BLU, BLU), (120, 139, BLU, MAG),
@@ -458,6 +574,7 @@ def save_preview(b, name):
 save_preview(sun_bytes, "preview_sunset.png")
 save_preview(ch_bytes, "preview_chase.png")
 save_preview(tcb, "preview_title.png")
+save_preview(fe_bytes, "preview_ferry.png")
 
 # ================================================================ zene
 def pitch(f):
@@ -495,6 +612,7 @@ fan += ev(20, None, 0)
 FANFARE = bytes(fan + [0])
 BLIP = bytes(ev(3, 1200, 14) + ev(3, 600, 10) + [0])
 STRIKE = bytes(ev(4, 160, 15) + ev(6, 110, 12) + [0])
+HORN = bytes(ev(40, 98, 15) + ev(10, None, 0) + ev(60, 98, 15) + ev(10, 98, 8) + ev(10, 98, 4) + [0])
 TADA = bytes(ev(5, note(76), 15) + ev(5, note(79), 15) + ev(5, note(84), 15) + ev(20, note(88), 15) + ev(10, note(88), 6) + [0])
 
 # ================================================================ szövegek, idővonalak
@@ -569,6 +687,14 @@ timeline("CAP_CHASE", [
     (480, "...MÁR A RENDŐRSÉG IS KERES!", LRED),
     (700, "", WHT),
 ])
+timeline("CAP_FERRY", [
+    (30, "SZÁNTÓDRÉV, 17:45.", WHT),
+    (170, "A KOMP NEM VÁR SENKIRE...", YEL),
+    (320, "...A RENDŐRSÉGRE SEM.", LRED),
+    (470, "KÖVETKEZŐ JÁRAT: 40 PERC.", LCYN),
+    (610, "TIHANY: KÖRÖZÉS...ZÉS...ÉS...", LGRN),
+    (790, "", WHT),
+])
 timeline("CAP_TITLE", [
     (40, "HAMAROSAN* A VIDEOTON TVC-N", WHT),
     (400, "", WHT),
@@ -625,7 +751,7 @@ for name, t in BIGS.items():
     db(name, t, 32)
 
 # képek
-for nm, b in (("IMG_SUNSET", sun_bytes), ("IMG_CHASE", ch_bytes), ("IMG_TITLE", tcb)):
+for nm, b in (("IMG_SUNSET", sun_bytes), ("IMG_CHASE", ch_bytes), ("IMG_TITLE", tcb), ("IMG_FERRY", fe_bytes)):
     r = rle(b[:214 * 64])
     assert unrle_check(r, 214 * 64) == b[:214 * 64]
     db(nm, r, 32)
@@ -665,11 +791,27 @@ for i in range(256):
     else: x = 12 + int(round(5 * math.sin((t - 70) / 9.0)))
     pol.append(x & 0xFF)
 db("POLPATH", pol, 32)
+pol = []
+for t in range(256):
+    x = -18 if t < 30 else min(4, -18 + (t - 30))
+    pol.append(x & 0xFF)
+db("FPOLPATH", pol, 32)
+# komp
+db("FERRY", FERRY, FERRY_W)
+db("GULL0", GULL[0], GULL_W); db("GULL1", GULL[1], GULL_W)
+out += [f"FERRY_Y equ {FERRY_Y}", f"FERRY_H equ {FERRY_H}", f"FERRY_W equ {FERRY_W}",
+        f"GULL_W equ {GULL_W}", f"GULL_H equ {GULL_H}", f"SKY_GULL_B equ {skyb}", f"RAMP_W equ {RAMP_W}",
+        f"FWAVE_N equ {len(FWAVE)}"]
+rows = []
+for i, (y, ln, right) in enumerate(FWAVE):
+    rows += [f"FWAVE{i}", 0x8000 + y * 64 + (RAMP_W if right else 0), right, (i * 5) & 15]
+    db(f"FWAVE{i}", ln, 32)
+dw("FWAVE_TAB", rows, 4)
 # címkép
 db("SUB_ON", SUB_ON, 32); db("SUB_OFF", SUB_OFF, 32)
 out.append(f"SUB_ADDR equ {0x8000 + (SUB_Y - 1) * 64}")
 # zene
-db("MUSIC", MUSIC); db("SIREN", SIREN); db("FANFARE", FANFARE); db("BLIP", BLIP); db("STRIKE", STRIKE); db("TADA", TADA)
+db("HORN", HORN); db("MUSIC", MUSIC); db("SIREN", SIREN); db("FANFARE", FANFARE); db("BLIP", BLIP); db("STRIKE", STRIKE); db("TADA", TADA)
 out.append(f"CAP_Y equ {CAP_Y}")
 out.append(f"STRIKE_B equ {pbyte(LRED, LRED)}")
 out.append(f"TRABI_X equ 38")

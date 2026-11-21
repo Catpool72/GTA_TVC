@@ -4,7 +4,7 @@
 ; Z80 @ 3.125 MHz, sjasmplus. Indítás: 10 PRINT USR(6659), automatikusan.
 ;
 ; Jelenetek: KŐSZTÁR GAMES bemutatja -> naplemente a Balatonon -> üldözés
-; Siófok mellett -> címkép -> a megjelenési dátumok csúszása.  Körbe megy.
+; Siófok mellett -> komp Tihanyba -> címkép -> a megjelenési dátumok csúszása.  Körbe megy.
 ; Szóköz: következő jelenet,  Esc: kilépés a BASIC-be.
 ;
 ; Memória (lapozás $90 = U0 | U1 | VID | U3):
@@ -66,6 +66,7 @@ start:
 .again: call scene_splash
         call scene_sunset
         call scene_chase
+        call scene_ferry
         call scene_title
         call scene_delay
         jr .again
@@ -684,6 +685,8 @@ scene_chase:
         ld (pol_last),a
         call draw_stars
         call draw_trabi
+        ld hl,POLPATH
+        ld (pol_path),hl
         ld hl,MUSIC
         call play_music
         ld hl,CAP_CHASE
@@ -778,7 +781,11 @@ rot_rows:
 ; ldi64 / ldi63: kibontott LDI-sorozat (BC-t rontja)
 ldi64:  ldi
 ldi63:
-        REPT 63
+        REPT 23
+        ldi
+        ENDR
+ldi40:
+        REPT 40
         ldi
         ENDR
         ret
@@ -805,7 +812,7 @@ police_step:
         jr z,$+4
         ld l,255
         ld h,0
-        ld de,POLPATH
+        ld de,(pol_path)
         add hl,de
         ld a,(hl)               ; x (előjeles)
         ld c,a
@@ -926,6 +933,155 @@ draw_money:
         ld hl,ft_buf
         ld de,HUD_FT_ADDR
         jp print_str
+
+;=============================================================================
+; 2b. KOMP TIHANYBA
+;=============================================================================
+scene_ferry:
+        ld hl,IMG_FERRY
+        call show_img
+        xor a
+        ld (siren_on),a
+        ld (wave_ph),a
+        ld a,4
+        ld (ferry_x),a
+        ld a,1
+        ld (ferry_cnt),a
+        ld a,50
+        ld (g1x),a
+        ld a,27
+        ld (g2x),a
+        call draw_ferry
+        ld hl,FPOLPATH
+        ld (pol_path),hl
+        ld hl,HORN
+        call play_once
+        ld hl,CAP_FERRY
+        ld de,800
+        call scene_start
+.loop:  call tick
+        ret c
+        call ferry_waves
+        ld a,(frame)
+        and 3
+        jr z,.f0
+        dec a
+        jr z,.f1
+        dec a
+        jr z,.f2
+        call police_step
+        jr .loop
+.f0:    ld hl,g1x
+        ld de,VRAM+38*64
+        call gull_one
+        ld hl,g2x
+        ld de,VRAM+52*64
+        call gull_one
+        jr .loop
+.f1:    ld hl,ferry_cnt         ; a komp 20 képkockánként 1 bájtot halad
+        dec (hl)
+        jr nz,.loop
+        ld (hl),5
+        ld hl,(frame)
+        ld de,60
+        or a
+        sbc hl,de
+        jr c,.loop
+        ld a,(ferry_x)
+        cp 24
+        jr nc,.loop
+        inc a
+        ld (ferry_x),a
+        call draw_ferry
+        jr .loop
+.f2:    ld hl,(frame)           ; a sziréna után zene
+        ld de,450
+        or a
+        sbc hl,de
+        jr nz,.loop
+        ld hl,MUSIC
+        call play_music
+        jr .loop
+
+draw_ferry:
+        ld a,(ferry_x)
+        ld hl,VRAM+FERRY_Y*64
+        add a,l
+        ld l,a
+        jr nc,$+3
+        inc h
+        ex de,hl
+        ld hl,FERRY
+        ld bc,FERRY_W*256+FERRY_H
+        jp blit_w
+
+; ferry_waves: 2 képkockánként a hullámsorok mintáját egy bájttal elcsúsztatja
+ferry_waves:
+        ld a,(frame)
+        and 1
+        ret nz
+        ld a,(wave_ph)
+        inc a
+        and 15
+        ld (wave_ph),a
+        ld hl,FWAVE_TAB
+        ld b,FWAVE_N
+.w:     push bc
+        ld e,(hl) : inc hl : ld d,(hl) : inc hl     ; minta
+        ld c,(hl) : inc hl : ld b,(hl) : inc hl     ; képernyőcím
+        ld a,(hl) : inc hl : inc hl                 ; csak a rámpától jobbra?
+        ld (fw_r),a
+        ld a,(hl) : inc hl : inc hl                 ; fáziseltolás
+        push hl
+        ld l,a
+        ld a,(wave_ph)
+        add a,l
+        and 15
+        ld l,a
+        ld h,0
+        add hl,de
+        ld a,(fw_r)
+        or a
+        ld d,b
+        ld e,c
+        jr z,.full
+        ld bc,RAMP_W
+        add hl,bc
+        call ldi40
+        jr .nx
+.full:  call ldi64
+.nx:    pop hl
+        pop bc
+        djnz .w
+        ret
+
+; gull_one: HL = a sirály x-változója, DE = a sor címe; balra repül, a szélen újrakezdi
+gull_one:
+        ld a,(hl)
+        or a
+        jr nz,.mv
+        push hl
+        push de
+        ex de,hl
+        ld a,SKY_GULL_B
+        ld bc,GULL_W*256+GULL_H
+        call fill_rect
+        pop de
+        pop hl
+        ld a,60
+.mv:    dec a
+        ld (hl),a
+        add a,e
+        ld e,a
+        jr nc,$+3
+        inc d
+        ld a,(frame)
+        and 8
+        ld hl,GULL0
+        jr z,$+5
+        ld hl,GULL1
+        ld bc,GULL_W*256+GULL_H
+        jp blit_w
 
 ;=============================================================================
 ; 3. CÍMKÉP
@@ -1247,6 +1403,13 @@ dash_ph:    db 0
 trabi_f:    db 0
 pol_last:   db 0
 ft_buf:     ds FT_LEN+1
+pol_path:   dw 0
+ferry_x:    db 0
+ferry_cnt:  db 0
+wave_ph:    db 0
+g1x:        db 0
+g2x:        db 0
+fw_r:       db 0
 dl_flags:   db 0
 dl_strike:  dw 0
 dl_w:       db 0
